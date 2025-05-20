@@ -1,16 +1,19 @@
-// airtable.js
-
 import { useState, useEffect } from 'react';
 import {
     Box,
     Button,
-    CircularProgress
+    CircularProgress,
+    Stack
 } from '@mui/material';
 import axios from 'axios';
+
+const AIRTABLE_URL = 'http://localhost:8000/integrations/airtable/';
+
 
 export const AirtableIntegration = ({ user, org, integrationParams, setIntegrationParams }) => {
     const [isConnected, setIsConnected] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
+    const [isDisconnecting, setIsDisconnecting] = useState(false);
 
     // Function to open OAuth in a new window
     const handleConnectClick = async () => {
@@ -19,7 +22,7 @@ export const AirtableIntegration = ({ user, org, integrationParams, setIntegrati
             const formData = new FormData();
             formData.append('user_id', user);
             formData.append('org_id', org);
-            const response = await axios.post(`http://localhost:8000/integrations/airtable/authorize`, formData);
+            const response = await axios.post(`${AIRTABLE_URL}authorize`, formData);
             const authURL = response?.data;
 
             const newWindow = window.open(authURL, 'Airtable Authorization', 'width=600, height=600');
@@ -31,9 +34,25 @@ export const AirtableIntegration = ({ user, org, integrationParams, setIntegrati
                     handleWindowClosed();
                 }
             }, 200);
+
         } catch (e) {
             setIsConnecting(false);
             alert(e?.response?.data?.detail);
+        }
+    }
+
+    // Function to handle disconnection
+    const handleDisconnect = async () => {
+        try {
+            setIsDisconnecting(true);
+            // Clear the credentials from the integration params
+            setIntegrationParams(prev => ({ ...prev, credentials: null, type: null }));
+            setIsConnected(false);
+            setIsDisconnecting(false);
+
+        } catch (e) {
+            setIsDisconnecting(false);
+            alert('Failed to disconnect: ' + e?.message);
         }
     }
 
@@ -43,14 +62,16 @@ export const AirtableIntegration = ({ user, org, integrationParams, setIntegrati
             const formData = new FormData();
             formData.append('user_id', user);
             formData.append('org_id', org);
-            const response = await axios.post(`http://localhost:8000/integrations/airtable/credentials`, formData);
+            const response = await axios.post(`${AIRTABLE_URL}credentials`, formData);
             const credentials = response.data; 
             if (credentials) {
                 setIsConnecting(false);
                 setIsConnected(true);
                 setIntegrationParams(prev => ({ ...prev, credentials: credentials, type: 'Airtable' }));
             }
+
             setIsConnecting(false);
+
         } catch (e) {
             setIsConnecting(false);
             alert(e?.response?.data?.detail);
@@ -59,27 +80,41 @@ export const AirtableIntegration = ({ user, org, integrationParams, setIntegrati
 
     useEffect(() => {
         setIsConnected(integrationParams?.credentials ? true : false)
-    }, []);
+    }, [integrationParams]);
 
     return (
         <>
         <Box sx={{mt: 2}}>
-            Parameters
-            <Box display='flex' alignItems='center' justifyContent='center' sx={{mt: 2}}>
-                <Button 
-                    variant='contained' 
-                    onClick={isConnected ? () => {} :handleConnectClick}
-                    color={isConnected ? 'success' : 'primary'}
-                    disabled={isConnecting}
-                    style={{
-                        pointerEvents: isConnected ? 'none' : 'auto',
-                        cursor: isConnected ? 'default' : 'pointer',
-                        opacity: isConnected ? 1 : undefined
-                    }}
-                >
-                    {isConnected ? 'Airtable Connected' : isConnecting ? <CircularProgress size={20} /> : 'Connect to Airtable'}
-                </Button>
-            </Box>
+            <Stack spacing={2} alignItems='center' sx={{mt: 2}}>
+                {!isConnected ? (
+                    <Button 
+                        variant='contained' 
+                        onClick={handleConnectClick}
+                        color='primary'
+                        disabled={isConnecting}
+                    >
+                        {isConnecting ? <CircularProgress size={20} /> : 'Connect to Airtable'}
+                    </Button>
+                ) : (
+                    <>
+                        <Button 
+                            variant='contained' 
+                            color='success'
+                            disabled
+                        >
+                            Airtable Connected
+                        </Button>
+                        <Button 
+                            variant='outlined' 
+                            color='error'
+                            onClick={handleDisconnect}
+                            disabled={isDisconnecting}
+                        >
+                            {isDisconnecting ? <CircularProgress size={20} /> : 'Disconnect'}
+                        </Button>
+                    </>
+                )}
+            </Stack>
         </Box>
       </>
     );
